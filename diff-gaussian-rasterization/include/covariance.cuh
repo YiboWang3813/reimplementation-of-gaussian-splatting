@@ -1,5 +1,7 @@
+// include/covariance.cuh 
 #pragma once 
 #include "basic_math.cuh"
+#include "config.h"
 
 
 __device__ __forceinline__ 
@@ -61,13 +63,16 @@ __device__ __forceinline__
 void compute_cov2D(
     float focal_x, float focal_y, 
     float tan_fovx, float tan_fovy, 
-    const float* p_world_tilde, // [4]
+    const float* p_world, // [3]
     const float* viewmatrix, // [16] 
     const float* cov3D, // [6] 
     float* cov2D // [3]
 )
 {
     // compute p_view_tilde 
+    float p_world_tilde[4] = {
+        p_world[0], p_world[1], p_world[2], 1.0f
+    }; 
     float p_view_tile[4]; 
     mat4_mul_vec4_rowmajor(viewmatrix, p_world_tilde, p_view_tile); 
 
@@ -114,4 +119,67 @@ void compute_cov2D(
     cov2D[0] = Sigma2D[0]; 
     cov2D[1] = Sigma2D[1]; 
     cov2D[2] = Sigma2D[4]; 
+}
+
+
+__device__ __forceinline__
+bool compute_ewa_conic_and_opacity(
+    const float* cov2D,        // [xx, xy, yy]
+    float* conic,              // [3]
+    float* opacity_scale
+)
+{
+    // initialize
+    *opacity_scale = 1.0f;
+
+    // copy covariance
+    float cov_f[3] = { cov2D[0], cov2D[1], cov2D[2] };
+
+    // optional antialiasing (covariance inflation + energy compensation)
+    if (antialiasing)
+    {
+        const float h_var = 0.3f;
+
+        cov_f[0] += h_var;
+        cov_f[2] += h_var;
+
+        float det_cov = cov2D[0] * cov2D[2]
+                      - cov2D[1] * cov2D[1];
+
+        float det_cov_f = cov_f[0] * cov_f[2]
+                        - cov_f[1] * cov_f[1];
+
+        // numerical stability + energy preservation
+        *opacity_scale = sqrtf(fmaxf(2.5e-5f, det_cov / det_cov_f));
+    }
+
+    // invert filtered covariance
+    float det = cov_f[0] * cov_f[2]
+              - cov_f[1] * cov_f[1];
+
+    if (det <= 0.0f)
+        return false;
+
+    float inv_det = 1.0f / det;
+
+    // conic representation (inverse covariance)
+    conic[0] =  inv_det * cov_f[2];
+    conic[1] = -inv_det * cov_f[1];
+    conic[2] =  inv_det * cov_f[0];
+
+    return true;
+}
+
+
+__device__ __forceinline__ 
+float compute_gaussian_radius_from_cov2D(
+    const float* cov2D // [3]  
+)
+{
+    float mid = 0.5f * (cov2D[0] + cov2D[2]); 
+    float det = cov2D[0] * cov2D[2] - cov2D[1] * cov2D[1]; 
+    float lambda1 = mid + sqrt(max(0.1f, mid * mid - det));
+	float lambda2 = mid - sqrt(max(0.1f, mid * mid - det));
+    float radius = ceil(3.0f * sqrt(max(lambda1, lambda2)));
+    return radius; 
 }
