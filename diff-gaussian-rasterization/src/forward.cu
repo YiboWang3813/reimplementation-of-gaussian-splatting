@@ -3,10 +3,12 @@
 #include <cooperative_groups/reduce.h>
 namespace cg = cooperative_groups;
 
+#include "config.h"
 #include "basic_math.cuh"
 #include "projection.cuh"
 #include "covariance.cuh"
 #include "tiling.cuh"
+#include "color.cuh"
 
 
 __global__ void kernel_preprocess(
@@ -21,8 +23,12 @@ __global__ void kernel_preprocess(
     const float* orig_points, 
     const float* scales, 
     const float* quats, 
+    const float* opacities, 
+    const float* shs, 
+    // trans mats 
     const float* viewmatrix, 
     const float* projmatrix, 
+    const float* cam_pos, 
     // output 
     int* radii, 
     uint32_t* tile_touched 
@@ -77,4 +83,18 @@ __global__ void kernel_preprocess(
     if (!compute_tile_rect_from_pixel_radius(
         p_image, radius, tile_grid, &tile_min, &tile_max 
     )) return; 
+
+    // compute color from sh 
+    const float* sh = & shs[idx * MAX_COEFFS * NUM_CHANNELS]; 
+
+    float rgb[3]; 
+    bool clamped[3]; 
+
+    compute_color_from_sh(
+        SH_DEGREE, MAX_COEFFS, 
+        p_world, cam_pos, sh, 
+        rgb, clamped
+    ); 
+
+
 }

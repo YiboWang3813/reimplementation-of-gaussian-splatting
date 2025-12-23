@@ -7,7 +7,9 @@
 
 #define antialiasing true 
 
+#define SH_DEGREE 3
 #define NUM_CHANNELS 3 // Default 3, RGB
+#define MAX_COEFFS 1 << (NUM_CHANNELS + 1) 
 
 
 #define BLOCK_X 16
