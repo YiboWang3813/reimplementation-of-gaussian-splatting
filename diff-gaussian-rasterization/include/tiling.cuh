@@ -6,40 +6,41 @@
 
 __device__ __forceinline__
 bool compute_tile_rect_from_pixel_radius(
-    const float* p_image,   // [x, y] in pixel space
-    const float radius, 
-    const dim3 tile_grid, 
-    uint2* tile_min, 
-    uint2* tile_max 
+    const int* p_image,   // [2] pixel center
+    int radius_px,          // integer pixel radius
+    dim3 tile_grid,
+    int* tile_min,          // [2]
+    int* tile_max           // [2]
 )
 {
-    float px = p_image[0], py = p_image[1]; 
+    int px = p_image[0];
+    int py = p_image[1];
 
-    float xmin = px - radius; 
-    float xmax = px + radius; 
-    float ymin = py - radius; 
-    float ymax = py + radius; 
+    // integer pixel bounds (conceptually)
+    float xmin = px - radius_px;
+    float xmax = px + radius_px;
+    float ymin = py - radius_px;
+    float ymax = py + radius_px;
 
     // convert to tile indices
-    int tx_min = (int)floorf(xmin / BLOCK_X);
-    int ty_min = (int)floorf(ymin / BLOCK_Y);
-    int tx_max = (int)floorf((xmax + BLOCK_X - 1) / BLOCK_X);
-    int ty_max = (int)floorf((ymax + BLOCK_Y - 1) / BLOCK_Y);
-
+    int tx_min = xmin / BLOCK_X;
+    int ty_min = ymin / BLOCK_Y;
+    int tx_max = (xmax + BLOCK_X) / BLOCK_X;
+    int ty_max = (ymax + BLOCK_Y) / BLOCK_Y;
+    
     // clamp to grid
     tx_min = max(0, min(tx_min, (int)tile_grid.x));
     ty_min = max(0, min(ty_min, (int)tile_grid.y));
     tx_max = max(0, min(tx_max, (int)tile_grid.x));
     ty_max = max(0, min(ty_max, (int)tile_grid.y));
 
-    // empty coverage check
     if (tx_min >= tx_max || ty_min >= ty_max)
         return false;
 
-    tile_min->x = (uint32_t)tx_min;
-    tile_min->y = (uint32_t)ty_min;
-    tile_max->x = (uint32_t)tx_max;
-    tile_max->y = (uint32_t)ty_max;
+    tile_min[0] = tx_min;
+    tile_min[1] = ty_min;
+    tile_max[0] = tx_max;
+    tile_max[1] = ty_max;
 
-    return true; 
+    return true;
 }

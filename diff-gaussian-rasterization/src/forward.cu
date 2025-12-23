@@ -20,31 +20,34 @@ __global__ void kernel_preprocess(
     const float tan_fovx, 
     const float tan_fovy, 
     // gaussian attributes 
-    const float* orig_points, 
-    const float* scales, 
-    const float* quats, 
-    const float* opacities, 
-    const float* shs, 
+    const float* orig_points, // [P, 3]
+    const float* scales, // [P, 3]
+    const float* quats, // [P, 4]
+    const float* opacities, // [P]
+    const float* shs, // [P, MAX_COEFFS, NUM_CHANNELS]
     // trans mats 
-    const float* viewmatrix, 
-    const float* projmatrix, 
-    const float* cam_pos, 
+    const float* viewmatrix, // [16]
+    const float* projmatrix, // [16]
+    const float* cam_pos, // [3]
     // output 
-    int* radii, 
-    uint32_t* tile_touched 
+    float* depths, // [P]
+    int* radii, // [P]
+    int* p_images, // [P, 2]
+    float* conic_opacities, // [P, 4] 
+    int* touched_tiles // [P]
 )
 {
-    auto idx = cg::this_grid().thread_rank(); 
-    if (idx >= P) return; 
+    int idx = (int)(blockIdx.x * blockDim.x + threadIdx.x);
+    if (idx >= P) return;
 
     radii[idx] = 0; 
-    tile_touched[idx] = 0; 
+    touched_tiles[idx] = 0; 
 
     // project and culling 
     const float* p_world = & orig_points[3 * idx]; 
     float p_view[3]; 
     float p_ndc[3]; 
-    float p_image[2]; 
+    int p_image[2]; 
 
     // if the depth in the view space <= z_near, skip this gauss 
     if (!project_and_cull(
@@ -76,12 +79,14 @@ __global__ void kernel_preprocess(
     )) return; 
 
     // get rect from cov2D 
-    float radius = compute_gaussian_radius_from_cov2D(cov2D);  
+    float radius_f = compute_gaussian_radius_from_cov2D(cov2D); 
+    int radius_px = (int)ceilf(radius_f);
 
-    uint2 tile_min, tile_max; 
+    int tile_min[2]; 
+    int tile_max[2]; 
     // if the coverage area is zero, skip this gauss 
     if (!compute_tile_rect_from_pixel_radius(
-        p_image, radius, tile_grid, &tile_min, &tile_max 
+        p_image, radius_px, tile_grid, tile_min, tile_max 
     )) return; 
 
     // compute color from sh 
@@ -96,5 +101,15 @@ __global__ void kernel_preprocess(
         rgb, clamped
     ); 
 
-
+    // save results 
+    depths[idx] = p_view[2]; 
+    radii[idx] = radius_px; 
+    p_images[idx * 2 + 0] = p_image[0]; 
+    p_images[idx * 2 + 1] = p_image[1]; 
+    float opacity = opacities[idx]; 
+    conic_opacities[idx * 4 + 0] = conic[0]; 
+    conic_opacities[idx * 4 + 1] = conic[1]; 
+    conic_opacities[idx * 4 + 2] = conic[2]; 
+    conic_opacities[idx * 4 + 3] = opacity * opacity_scale; 
+    touched_tiles[idx] = (tile_max[1] - tile_min[1]) * (tile_max[0] - tile_min[0]); 
 }

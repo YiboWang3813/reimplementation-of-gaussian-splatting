@@ -5,9 +5,9 @@
 
 
 __device__ __forceinline__
-float ndc2Pix(float v, int S)
+int ndc2Pix(float v, int S)
 {
-	return ((v + 1.0) * S - 1.0) * 0.5;
+	return (int) (((v + 1.0) * S - 1.0) * 0.5); 
 }
 
 
@@ -19,7 +19,7 @@ bool project_and_cull(
     const float* projmatrix,    // [16]
     float* p_view, // [3] 
     float* p_ndc, // [3] 
-    float* p_image // [2] 
+    int* p_image // [2] 
 )
 {
     // world space 
