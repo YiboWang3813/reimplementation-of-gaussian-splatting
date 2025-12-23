@@ -50,8 +50,10 @@ __global__ void kernel_preprocess(
     };
 
     // compute cov3D always in CUDA 
+    const float* scale = &scales[3 * idx]; 
+    const float* quat = &quats[4 * idx]; 
     float cov3D[6]; 
-    compute_cov3D(idx, scales, quats, cov3D); 
+    compute_cov3D(scale, quat, cov3D);  
 
 
 

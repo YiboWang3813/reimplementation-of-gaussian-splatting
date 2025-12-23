@@ -26,20 +26,18 @@ void quat_to_rotmat_rowmajor(
 
 __device__ __forceinline__
 void compute_cov3D(
-    int idx, 
-    const float* scales, // [P, 3]
-    const float* quats, // [P, 4] 
+    const float* scale, // [3]
+    const float* quat, // [4] r,x,y,z
     float* cov3D // [6] [xx, xy, xz, yy, yz, zz]
 )
 {
     float S[9] = {0.0f}; 
-    S[0] = scales[3 * idx + 0]; 
-    S[4] = scales[3 * idx + 1]; 
-    S[8] = scales[3 * idx + 2]; 
+    S[0] = scale[0]; 
+    S[4] = scale[1]; 
+    S[8] = scale[2];  
     
-    const float* q = &quats[4 * idx]; 
     float R[9]; 
-    quat_to_rotmat_rowmajor(q, R); 
+    quat_to_rotmat_rowmajor(quat, R); 
 
     float M[9]; 
     mat3_mul_mat3_rowmajor(S, R, M); 
